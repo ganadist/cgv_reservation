@@ -2,7 +2,9 @@
 # -*- encoding: utf-8 -*-
 # vim: ts=4 st=4 sts=4 expandtab syntax=python
 import sys, os
-import math
+import math, time
+
+t1 = time.time()
 
 USE_GTK2 = True
 
@@ -41,6 +43,7 @@ THEATER_URI = "http://m.cgv.co.kr/Theater/Theater.aspx"
 SEAT_URI = "http://m.cgv.co.kr/Reservation/Seat.aspx"
 CHECK_URI = "http://m.cgv.co.kr/Reservation/CheckRsvMovie.aspx"
 PAYTYPE_URI = "http://m.cgv.co.kr/MPG/Paytype.aspx"
+SUCCESS_URI = "http://m.cgv.co.kr/MPG/Success.aspx"
 
 APP_NAME = "CGV"
 
@@ -78,6 +81,7 @@ class Window(Gtk.Window):
             SEAT_URI: self.handle_seat,
             CHECK_URI: self.handle_check,
             PAYTYPE_URI: self.handle_pay_type,
+            SUCCESS_URI: self.handle_success,
         }.get(uri)
 
         if cb:
@@ -185,7 +189,10 @@ class Window(Gtk.Window):
         if card:
             card.click()
             return
-        dom.get_element_by_id('ddlCardType').set_value(CARDTYPE)
+        cardtype = dom.get_element_by_id('ddlCardType')
+        if not cardtype:
+            return
+        cardtype.set_value(CARDTYPE)
 
         for i, data in enumerate(CARDNUM.split()):
             cardno = dom.get_element_by_id('tbCardNo%d'%(i+1))
@@ -203,6 +210,9 @@ class Window(Gtk.Window):
         passwd.set_value(CARDPASS[:2])
 
         dom.get_element_by_id('ibCardPayment').click()
+
+    def handle_success(self):
+        print 'payment checkout is done. Total time:', time.time() - t1, 'sec'
 
     def setup_webview(self, webview):
         session = WebKit.get_default_session()
