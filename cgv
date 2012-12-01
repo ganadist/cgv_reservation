@@ -1,0 +1,240 @@
+#!/usr/bin/env python2
+# -*- encoding: utf-8 -*-
+# vim: ts=4 st=4 sts=4 expandtab syntax=python
+import sys, os
+import math
+
+USE_GTK2 = True
+
+try:
+    import gi
+    from gi.repository import GLib, Gio, Soup
+
+    if USE_GTK2:
+        gi.require_version('Gtk', '2.0')
+        gi.require_version('Gdk', '2.0')
+        gi.require_version('WebKit', '1.0')
+    from gi.repository import Gtk, Gdk, WebKit
+except (ValueError, ImportError):
+    packageName = 'gir-1.2-webkit-3.0'
+    if USE_GTK2:
+        packageName = 'gir-1.2-webkit-1.0'
+    print 'Please install %s package'%packageName
+    print
+    print '$ sudo apt-get install %s'%packageName
+    sys.exit(1)
+
+BASE_PATH = os.path.join(os.getenv('HOME'), ".cgv")
+DATABASE_PATH = os.path.join(BASE_PATH, "database")
+COOKIE_FILE = os.path.join(BASE_PATH, "cookie.txt")
+
+from auth import *
+
+# 왕십리 12월 15일
+START_URI = "http://m.cgv.co.kr/Theater/Theater.aspx?TheaterCd=0074&AreaCd=&PlayYMD=20121215"
+# for test
+START_URI = "http://m.cgv.co.kr/Theater/Theater.aspx?TheaterCd=0074&AreaCd=&PlayYMD=20121204"
+
+HOME_URL = "http://m.cgv.co.kr/"
+LOGIN_URI = "http://m.cgv.co.kr/Member/Login.aspx"
+THEATER_URI = "http://m.cgv.co.kr/Theater/Theater.aspx"
+SEAT_URI = "http://m.cgv.co.kr/Reservation/Seat.aspx"
+CHECK_URI = "http://m.cgv.co.kr/Reservation/CheckRsvMovie.aspx"
+PAYTYPE_URI = "http://m.cgv.co.kr/MPG/Paytype.aspx"
+
+APP_NAME = "CGV"
+
+def iter_dom(node_list, start = 0):
+    length = node_list.get_length()
+    for i in range(start, length):
+        yield node_list.item(i)
+
+class Window(Gtk.Window):
+    def __init__(self):
+        Gtk.Window.__init__(self)
+        scroll = Gtk.ScrolledWindow()
+        view = WebKit.WebView()
+        scroll.add(view)
+        self.add(scroll)
+        self.webview = view
+
+        self.setup_webview(view)
+
+        self.connect("destroy", Gtk.main_quit)
+        view.connect("notify::load-status", self.handle_load_status)
+        self.set_default_size(800, 600)
+        self.webview.load_uri(START_URI)
+
+    def login(self):
+        self.webview.load_uri(LOGIN_URI)
+
+    def handle_uri(self, uri):
+        if '?' in uri:
+            uri = uri.split('?', 1)[0]
+        cb = {
+            LOGIN_URI: self.handle_login,
+            HOME_URL: self.handle_home,
+            THEATER_URI: self.handle_theater,
+            SEAT_URI: self.handle_seat,
+            CHECK_URI: self.handle_check,
+            PAYTYPE_URI: self.handle_pay_type,
+        }.get(uri)
+
+        if cb:
+            cb()
+            #GLib.timeout_add(1000, cb)
+        else:
+            print 'unhandled uri:', uri
+
+    def handle_load_status(self, webview, psepc):
+        status = webview.get_load_status()
+        if status == WebKit.LoadStatus.FINISHED:
+            self.handle_uri(webview.props.uri)
+
+    def handle_login(self):
+        dom = self.webview.get_dom_document()
+        dom.get_element_by_id('Login_tbUserID').set_value(USERNAME)
+        dom.get_element_by_id('Login_tbPassword').set_value(PASSWORD)
+        dom.get_element_by_id('Login_cbRememberUserID').set_value('on')
+        dom.get_element_by_id('Login_cbRememberPassword').set_value('on')
+        dom.get_element_by_id('Login_ibLogin').click()
+
+    def handle_home(self):
+        self.webview.load_uri(START_URI)
+
+    def handle_theater(self):
+        dom = self.webview.get_dom_document()
+        for movie_set in iter_dom(dom.get_elements_by_class_name('theater_movie_set')):
+            title = movie_set.get_elements_by_class_name('tlt').item(0).get_text_content()
+            timelist = movie_set.get_elements_by_class_name('timelist').item(0).get_children()
+            theater = timelist.item(0).get_text_content().strip()
+            # process IMAX only
+            if not 'imax' in theater.lower():
+                continue
+            for item in iter_dom(timelist, 1):
+                link = item.get_children().item(0)
+                text = link.get_text_content()
+                time, count = text.split()
+                count = count[1:-1]
+                print time, count, link
+                # FIXME
+                link.click()
+                break
+
+    def handle_seat(self):
+        dom = self.webview.get_dom_document()
+        COUNT_ID = 'dr_general_count'
+        SCRIPT = """
+            count = document.getElementById('%s');
+            count.selectedIndex = 1;
+            count.onchange();
+        """%COUNT_ID
+        self.webview.execute_script(SCRIPT)
+
+        items = list(iter_dom(dom.get_elements_by_class_name('pointer available')))
+
+        CENTER_X = 16.5
+        CENTER_Y = 6
+        def sort_seat(a, b):
+            try:
+                bx = int(b.get_attribute('x'))
+                by = int(b.get_attribute('y'))
+            except ValueError:
+                return -1
+            try:
+                ax = int(a.get_attribute('x'))
+                ay = int(a.get_attribute('y'))
+            except ValueError:
+                return 1
+
+            def dist(x, y):
+                return math.sqrt((x - CENTER_X) ** 2 + (y - CENTER_Y) ** 2)
+            ad = dist(ax, ay)
+            bd = dist(bx, by)
+            if ad < bd: return -1
+            elif ad > bd: return 1
+            return 0
+
+        items.sort(sort_seat)
+
+        items[0].click()
+
+        if True:
+            dom.get_element_by_id('ibSelectTicket').click()
+            return
+
+        # for test
+        def do_something():
+            for item in items[:8]:
+                item.click()
+                yield True
+                item.click()
+                yield True
+
+        it = do_something()
+
+        GLib.timeout_add(1000, it.next)
+
+    def handle_check(self):
+        dom = self.webview.get_dom_document()
+        dom.get_element_by_id('ibPayment').click()
+
+    def handle_pay_type(self):
+        dom = self.webview.get_dom_document()
+        card = dom.get_element_by_id('ibCard')
+        if card:
+            card.click()
+            return
+        dom.get_element_by_id('ddlCardType').set_value(CARDTYPE)
+
+        for i, data in enumerate(CARDNUM.split()):
+            cardno = dom.get_element_by_id('tbCardNo%d'%(i+1))
+            cardno.set_value(data)
+
+        mm = dom.get_element_by_id('ddlCardMonth')
+        mm.set_value(CARDVALID.split('/')[0])
+        yy = dom.get_element_by_id('ddlCardYear')
+        yy.set_value(CARDVALID.split('/')[1])
+
+        ssn2 = dom.get_element_by_id('tbCardSsn2')
+        ssn2.set_value(SSN.split('-')[1])
+
+        passwd = dom.get_element_by_id('tbCardPwd')
+        passwd.set_value(CARDPASS[:2])
+
+        dom.get_element_by_id('ibCardPayment').click()
+
+    def setup_webview(self, webview):
+        session = WebKit.get_default_session()
+        jar = Soup.CookieJarText.new(COOKIE_FILE, False)
+        jar.set_accept_policy(Soup.CookieJarAcceptPolicy.ALWAYS)
+        session.add_feature(jar)
+
+        WebKit.set_web_database_directory_path(DATABASE_PATH)
+        settings = webview.get_settings()
+        settings.props.enable_page_cache = True
+        settings.props.enable_default_context_menu = False
+        # for speed up
+        settings.props.auto_load_images = False
+        settings.props.enable_dns_prefetching = True
+        
+        webview.set_settings(settings)
+
+if __name__ == '__main__':
+    win = Window()
+    win.show_all()
+
+    exchook = sys.excepthook
+    def new_hook(type, value, traceback):
+        if isinstance(value, KeyboardInterrupt):
+            Gtk.main_quit()
+            return
+        return exchook(type, value, traceback)
+
+    sys.excepthook = new_hook
+
+    # it should raise KeyboardInterrupt
+    GLib.timeout_add(500, lambda : True)
+
+    Gtk.main()
+
