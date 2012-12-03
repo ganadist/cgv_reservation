@@ -52,6 +52,13 @@ def iter_dom(node_list, start = 0):
     for i in range(start, length):
         yield node_list.item(i)
 
+class Timer:
+    def __init__(self, duration, cb, *args):
+        self.tag = GLib.timeout_add(duration, cb, *args)
+
+    def __del__(self):
+        GLib.source_remove(self.tag)
+
 class Window(Gtk.Window):
     def __init__(self):
         Gtk.Window.__init__(self)
@@ -91,7 +98,6 @@ class Window(Gtk.Window):
 
         if cb:
             cb()
-            #GLib.timeout_add(1000, cb)
         else:
             print 'unhandled uri:', uri
 
@@ -99,6 +105,10 @@ class Window(Gtk.Window):
         status = webview.get_load_status()
         if status == WebKit.LoadStatus.FINISHED:
             self.handle_uri(webview.props.uri)
+        elif status == WebKit.LoadStatus.PROVISIONAL:
+            self.reload_tag = None
+        elif status == WebKit.LoadStatus.FAILED:
+            self.webview.load_uri(START_URI)
 
     def handle_login(self):
         dom = self.webview.get_dom_document()
@@ -112,6 +122,8 @@ class Window(Gtk.Window):
         self.webview.load_uri(START_URI)
 
     def handle_theater(self):
+        self.reload_tag = Timer(1000, self.webview.load_uri, START_URI)
+
         dom = self.webview.get_dom_document()
         for movie_set in iter_dom(dom.get_elements_by_class_name('theater_movie_set')):
             title = movie_set.get_elements_by_class_name('tlt').item(0).get_text_content()
@@ -165,7 +177,6 @@ class Window(Gtk.Window):
             return 0
 
         items.sort(sort_seat)
-
         items[0].click()
 
         if True:
