@@ -65,8 +65,13 @@ class Window(Gtk.Window):
 
         self.connect("destroy", Gtk.main_quit)
         view.connect("notify::load-status", self.handle_load_status)
+        view.connect("script-alert", self.handle_alert)
         self.set_default_size(800, 600)
         self.webview.load_uri(START_URI)
+
+    def handle_alert(self, *args):
+        # skip alert dialog
+        return True
 
     def login(self):
         self.webview.load_uri(LOGIN_URI)
