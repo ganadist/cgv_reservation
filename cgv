@@ -3,6 +3,7 @@
 # vim: ts=4 st=4 sts=4 expandtab syntax=python
 import sys, os
 import math, time
+from systrace import trace
 
 t1 = time.time()
 
@@ -35,7 +36,7 @@ from auth import *
 # 왕십리 12월 15일
 START_URI = "http://m.cgv.co.kr/Theater/Theater.aspx?TheaterCd=0074&AreaCd=&PlayYMD=20121215"
 # for test
-START_URI = "http://m.cgv.co.kr/Theater/Theater.aspx?TheaterCd=0074&AreaCd=&PlayYMD=20121204"
+START_URI = "http://m.cgv.co.kr/Theater/Theater.aspx?TheaterCd=0074&AreaCd=&PlayYMD=20130114"
 
 HOME_URL = "http://m.cgv.co.kr/"
 LOGIN_URI = "http://m.cgv.co.kr/Member/Login.aspx"
@@ -60,6 +61,7 @@ class Timer:
         GLib.source_remove(self.tag)
 
 class Window(Gtk.Window):
+    @trace()
     def __init__(self):
         Gtk.Window.__init__(self)
         scroll = Gtk.ScrolledWindow()
@@ -76,13 +78,16 @@ class Window(Gtk.Window):
         self.set_default_size(800, 600)
         self.webview.load_uri(START_URI)
 
+    @trace()
     def handle_alert(self, *args):
         # skip alert dialog
         return True
 
+    @trace()
     def login(self):
         self.webview.load_uri(LOGIN_URI)
 
+    @trace()
     def handle_uri(self, uri):
         if '?' in uri:
             uri = uri.split('?', 1)[0]
@@ -101,6 +106,7 @@ class Window(Gtk.Window):
         else:
             print 'unhandled uri:', uri
 
+    @trace()
     def handle_load_status(self, webview, psepc):
         status = webview.get_load_status()
         if status == WebKit.LoadStatus.FINISHED:
@@ -110,6 +116,7 @@ class Window(Gtk.Window):
         elif status == WebKit.LoadStatus.FAILED:
             self.webview.load_uri(START_URI)
 
+    @trace()
     def handle_login(self):
         dom = self.webview.get_dom_document()
         dom.get_element_by_id('Login_tbUserID').set_value(USERNAME)
@@ -118,9 +125,11 @@ class Window(Gtk.Window):
         dom.get_element_by_id('Login_cbRememberPassword').set_value('on')
         dom.get_element_by_id('Login_ibLogin').click()
 
+    @trace()
     def handle_home(self):
         self.webview.load_uri(START_URI)
 
+    @trace()
     def handle_theater(self):
         self.reload_tag = Timer(1000, self.webview.load_uri, START_URI)
 
@@ -142,6 +151,7 @@ class Window(Gtk.Window):
                 link.click()
                 break
 
+    @trace()
     def handle_seat(self):
         dom = self.webview.get_dom_document()
         COUNT_ID = 'dr_general_count'
@@ -195,10 +205,12 @@ class Window(Gtk.Window):
 
         GLib.timeout_add(1000, it.next)
 
+    @trace()
     def handle_check(self):
         dom = self.webview.get_dom_document()
         dom.get_element_by_id('ibPayment').click()
 
+    @trace()
     def handle_pay_type(self):
         dom = self.webview.get_dom_document()
         card = dom.get_element_by_id('ibCard')
@@ -227,9 +239,11 @@ class Window(Gtk.Window):
 
         dom.get_element_by_id('ibCardPayment').click()
 
+    @trace()
     def handle_success(self):
         print 'payment checkout is done. Total time:', time.time() - t1, 'sec'
 
+    @trace()
     def setup_webview(self, webview):
         session = WebKit.get_default_session()
         jar = Soup.CookieJarText.new(COOKIE_FILE, False)
