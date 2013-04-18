@@ -1,30 +1,31 @@
 #!/usr/bin/env python2
 # -*- encoding: utf-8 -*-
 # vim: ts=4 st=4 sts=4 expandtab syntax=python
-import sys, os
-import math, time
+import math
+import os
+import sys
+import time
 from systrace import trace
 
 t1 = time.time()
 
-USE_GTK2 = True
+USE_GTK2 = False
 
 try:
     import gi
-    from gi.repository import GLib, Gio, Soup
-    
+    from gi.repository import GLib, Soup
+
     if USE_GTK2:
         gi.require_version('Gtk', '2.0')
-        gi.require_version('Gdk', '2.0')
         gi.require_version('WebKit', '1.0')
-    from gi.repository import Gtk, Gdk, WebKit
+    from gi.repository import Gtk, WebKit
 except (ValueError, ImportError):
     packageName = 'gir1.2-webkit-3.0'
     if USE_GTK2:
         packageName = 'gir1.2-webkit-1.0'
-    print 'Please install %s package'%packageName
+    print 'Please install %s package' % packageName
     print
-    print '$ sudo apt-get install %s'%packageName
+    print '$ sudo apt-get install %s' % packageName
     sys.exit(1)
 
 BASE_PATH = os.path.join(os.getenv('HOME'), ".cgv")
@@ -34,25 +35,36 @@ COOKIE_FILE = os.path.join(BASE_PATH, "cookie.txt")
 from auth import *
 from config import *
 
+DEBUG = False
 # 왕십리 2013년 4월 25일
 START_URI = "http://m.cgv.co.kr/Theater/Theater.aspx?TheaterCd=%s&AreaCd=&PlayYMD=%s" % (THEATER_CODE, PLAY_YMD)
-# for test
-#START_URI = "http://m.cgv.co.kr/Theater/Theater.aspx?TheaterCd=0074&AreaCd=&PlayYMD=20130114"
+START_URI = "http://m.cgv.co.kr/Theater/Special.aspx?TheaterType=02&TheaterCd=%s&PlayYMD=%s" % (THEATER_CODE, PLAY_YMD)
+
+if DEBUG:
+	START_URI = "http://m.cgv.co.kr/Theater/Special.aspx?TheaterType=02&TheaterCd=0074&PlayYMD=20130421"
 
 HOME_URL = "http://m.cgv.co.kr/"
 LOGIN_URI = "http://m.cgv.co.kr/Member/Login.aspx"
-THEATER_URI = "http://m.cgv.co.kr/Theater/Theater.aspx"
+THEATER_URI = "http://m.cgv.co.kr/Theater/Special.aspx"
 SEAT_URI = "http://m.cgv.co.kr/Reservation/Seat.aspx"
 CHECK_URI = "http://m.cgv.co.kr/Reservation/CheckRsvMovie.aspx"
 PAYTYPE_URI = "http://m.cgv.co.kr/MPG/Paytype.aspx"
 SUCCESS_URI = "http://m.cgv.co.kr/MPG/Success.aspx"
 
+SEAT_X = range(11, 23)
+SEAT_Y = range(5, 19)
+
 APP_NAME = "CGV"
 
-def iter_dom(node_list, start = 0):
-    length = node_list.get_length()
+
+def iter_dom(node_list, start=0):
+    if node_list:
+        length = node_list.get_length()
+    else:
+        length = 0
     for i in range(start, length):
         yield node_list.item(i)
+
 
 class Timer:
     def __init__(self, duration, cb, *args):
@@ -61,9 +73,11 @@ class Timer:
     def __del__(self):
         GLib.source_remove(self.tag)
 
-class Window(Gtk.Window):
+
+class Window(Gtk.Window, object):
     @trace()
     def __init__(self):
+        object.__init__(self)
         Gtk.Window.__init__(self)
         scroll = Gtk.ScrolledWindow()
         view = WebKit.WebView()
@@ -77,7 +91,10 @@ class Window(Gtk.Window):
         view.connect("notify::load-status", self.handle_load_status)
         view.connect("script-alert", self.handle_alert)
         self.set_default_size(800, 600)
-        self.webview.load_uri(START_URI)
+        self.load_uri(START_URI)
+
+    def load_uri(self, uri):
+        self.webview.load_uri(uri)
 
     @trace()
     def handle_alert(self, *args):
@@ -86,7 +103,7 @@ class Window(Gtk.Window):
 
     @trace()
     def login(self):
-        self.webview.load_uri(LOGIN_URI)
+        self.load_uri(LOGIN_URI)
 
     @trace()
     def handle_uri(self, uri):
@@ -115,7 +132,7 @@ class Window(Gtk.Window):
         elif status == WebKit.LoadStatus.PROVISIONAL:
             self.reload_tag = None
         elif status == WebKit.LoadStatus.FAILED:
-            self.webview.load_uri(START_URI)
+            self.load_uri(START_URI)
 
     @trace()
     def handle_login(self):
@@ -128,21 +145,25 @@ class Window(Gtk.Window):
 
     @trace()
     def handle_home(self):
-        self.webview.load_uri(START_URI)
+        self.load_uri(START_URI)
 
     @trace()
     def handle_theater(self):
-        self.reload_tag = Timer(1000, self.webview.load_uri, START_URI)
+        self.reload_tag = Timer(1000, self.load_uri, START_URI)
 
         dom = self.webview.get_dom_document()
-        for movie_set in iter_dom(dom.get_elements_by_class_name('theater_movie_set')):
-            title = movie_set.get_elements_by_class_name('tlt').item(0).get_text_content()
-            timelist = movie_set.get_elements_by_class_name('timelist').item(0).get_children()
-            theater = timelist.item(0).get_text_content().strip()
+        for movie_set in iter_dom(dom.query_selector_all("div[class='theater_movie_set']")):
+            text = ''
+            for title in iter_dom(movie_set.query_selector_all("div[class='tlt']")):
+                text = title.get_text_content()
+                if text.strip():
+                    break
             # process IMAX only
-            if not 'imax' in theater.lower():
+            if not 'imax' in text.lower():
                 continue
-            for item in iter_dom(timelist, 1):
+
+            timelist = movie_set.query_selector_all("li[class='list on']")
+            for item in iter_dom(timelist):
                 link = item.get_children().item(0)
                 text = link.get_text_content()
                 time, count = text.split()
@@ -154,29 +175,35 @@ class Window(Gtk.Window):
 
     @trace()
     def handle_seat(self):
+        self.reload_tag = Timer(1000, self.webview.reload)
         dom = self.webview.get_dom_document()
         COUNT_ID = 'dr_general_count'
         SCRIPT = """
             count = document.getElementById('%s');
             count.selectedIndex = %d;
             count.onchange();
-        """%(COUNT_ID, NUM_SEAT)
+        """ % (COUNT_ID, NUM_SEAT)
         self.webview.execute_script(SCRIPT)
 
         items = list(iter_dom(dom.get_elements_by_class_name('pointer available')))
+        if not items:
+            return
 
         CENTER_X = 16.5
         CENTER_Y = 6
+
+        def get_xy(i):
+            try:
+                return int(i.get_attribute('x')), int(i.get_attribute('y'))
+            except ValueError:
+                return -1, -1
+
         def sort_seat(a, b):
-            try:
-                bx = int(b.get_attribute('x'))
-                by = int(b.get_attribute('y'))
-            except ValueError:
+            bx, by = get_xy(b)
+            if (bx, by) == (-1, -1):
                 return -1
-            try:
-                ax = int(a.get_attribute('x'))
-                ay = int(a.get_attribute('y'))
-            except ValueError:
+            ax, ay = get_xy(a)
+            if (ax, ay) == (-1, -1):
                 return 1
 
             def dist(x, y):
@@ -188,9 +215,14 @@ class Window(Gtk.Window):
             return 0
 
         items.sort(sort_seat)
-        items[0].click()
-
         if True:
+            item = items[0]
+            x, y = get_xy(item)
+            if not x in SEAT_X:
+                return
+            if not y in SEAT_Y:
+                return
+            item.click()
             dom.get_element_by_id('ibSelectTicket').click()
             return
 
@@ -224,7 +256,7 @@ class Window(Gtk.Window):
         cardtype.set_value(CARDTYPE)
 
         for i, data in enumerate(CARDNUM.split()):
-            cardno = dom.get_element_by_id('tbCardNo%d'%(i+1))
+            cardno = dom.get_element_by_id('tbCardNo%d' % (i+1))
             cardno.set_value(data)
 
         mm = dom.get_element_by_id('ddlCardMonth')
@@ -246,6 +278,10 @@ class Window(Gtk.Window):
 
     @trace()
     def setup_webview(self, webview):
+        try:
+            os.makedirs(BASE_PATH)
+        except:
+            pass
         session = WebKit.get_default_session()
         jar = Soup.CookieJarText.new(COOKIE_FILE, False)
         jar.set_accept_policy(Soup.CookieJarAcceptPolicy.ALWAYS)
@@ -258,7 +294,7 @@ class Window(Gtk.Window):
         # for speed up
         settings.props.auto_load_images = False
         settings.props.enable_dns_prefetching = True
-        
+
         webview.set_settings(settings)
 
 if __name__ == '__main__':
@@ -266,6 +302,7 @@ if __name__ == '__main__':
     win.show_all()
 
     exchook = sys.excepthook
+
     def new_hook(type, value, traceback):
         if isinstance(value, KeyboardInterrupt):
             Gtk.main_quit()
@@ -275,7 +312,7 @@ if __name__ == '__main__':
     sys.excepthook = new_hook
 
     # it should raise KeyboardInterrupt
-    GLib.timeout_add(500, lambda : True)
+    GLib.timeout_add(500, lambda: True)
 
     Gtk.main()
 

@@ -1,6 +1,6 @@
 # -*- encoding: utf-8 -*-
 """
-{ 
+{
     '0056':'강남',
     '0060':'강동',
     '0001':'강변',
@@ -102,4 +102,4 @@
 THEATER_CODE = '0074' # 왕십리
 PLAY_YMD = '20130425'
 COUNT_ID = 'dr_general_count' # 일반:dr_general_count, 학생:dr_student_count
-NUM_SEAT = 2 # 1-8
+NUM_SEAT = 1 # 1-8
