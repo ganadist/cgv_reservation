@@ -12,16 +12,16 @@ USE_GTK2 = True
 try:
     import gi
     from gi.repository import GLib, Gio, Soup
-
+    
     if USE_GTK2:
         gi.require_version('Gtk', '2.0')
         gi.require_version('Gdk', '2.0')
         gi.require_version('WebKit', '1.0')
     from gi.repository import Gtk, Gdk, WebKit
 except (ValueError, ImportError):
-    packageName = 'gir-1.2-webkit-3.0'
+    packageName = 'gir1.2-webkit-3.0'
     if USE_GTK2:
-        packageName = 'gir-1.2-webkit-1.0'
+        packageName = 'gir1.2-webkit-1.0'
     print 'Please install %s package'%packageName
     print
     print '$ sudo apt-get install %s'%packageName
@@ -32,11 +32,12 @@ DATABASE_PATH = os.path.join(BASE_PATH, "database")
 COOKIE_FILE = os.path.join(BASE_PATH, "cookie.txt")
 
 from auth import *
+from config import *
 
-# 왕십리 12월 15일
-START_URI = "http://m.cgv.co.kr/Theater/Theater.aspx?TheaterCd=0074&AreaCd=&PlayYMD=20121215"
+# 왕십리 2013년 4월 25일
+START_URI = "http://m.cgv.co.kr/Theater/Theater.aspx?TheaterCd=%s&AreaCd=&PlayYMD=%s" % (THEATER_CODE, PLAY_YMD)
 # for test
-START_URI = "http://m.cgv.co.kr/Theater/Theater.aspx?TheaterCd=0074&AreaCd=&PlayYMD=20130114"
+#START_URI = "http://m.cgv.co.kr/Theater/Theater.aspx?TheaterCd=0074&AreaCd=&PlayYMD=20130114"
 
 HOME_URL = "http://m.cgv.co.kr/"
 LOGIN_URI = "http://m.cgv.co.kr/Member/Login.aspx"
@@ -157,9 +158,9 @@ class Window(Gtk.Window):
         COUNT_ID = 'dr_general_count'
         SCRIPT = """
             count = document.getElementById('%s');
-            count.selectedIndex = 1;
+            count.selectedIndex = %d;
             count.onchange();
-        """%COUNT_ID
+        """%(COUNT_ID, NUM_SEAT)
         self.webview.execute_script(SCRIPT)
 
         items = list(iter_dom(dom.get_elements_by_class_name('pointer available')))
