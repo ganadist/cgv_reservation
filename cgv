@@ -19,9 +19,9 @@ try:
         gi.require_version('WebKit', '1.0')
     from gi.repository import Gtk, Gdk, WebKit
 except (ValueError, ImportError):
-    packageName = 'gir-1.2-webkit-3.0'
+    packageName = 'gir1.2-webkit-3.0'
     if USE_GTK2:
-        packageName = 'gir-1.2-webkit-1.0'
+        packageName = 'gir1.2-webkit-1.0'
     print 'Please install %s package'%packageName
     print
     print '$ sudo apt-get install %s'%packageName
